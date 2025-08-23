@@ -12,6 +12,7 @@ from umap_pytorch.model import default_encoder, default_decoder
 from umap.umap_ import find_ab_params
 import dill
 from umap import UMAP
+import logging
 
 """ Model """
 
@@ -84,13 +85,16 @@ class Datamodule(pl.LightningDataModule):
         self.num_workers = num_workers
 
     def train_dataloader(self) -> DataLoader:
-        return DataLoader(
+        dataloader = DataLoader(
             dataset=self.dataset,
-            batch_size=self.batch_size,
+            batch_size=1, #self.batch_size,
             num_workers=self.num_workers,
             shuffle=True,
+            collate_fn=lambda x: x[0] 
         )
-
+        print("dataloader len:", len(dataloader))
+        return dataloader
+        
 class PUMAP():
     def __init__(
         self,
@@ -129,7 +133,7 @@ class PUMAP():
         self.match_nonparametric_umap = match_nonparametric_umap
         self.knn_indices = knn_indices
         self.knn_dists = knn_dists
-        
+
     def fit(self, X):
         trainer = pl.Trainer(accelerator='gpu', devices=1, max_epochs=self.epochs)
         encoder = default_encoder(X.shape[1:], self.n_components) if self.encoder is None else self.encoder
@@ -139,14 +143,16 @@ class PUMAP():
         elif self.decoder == True:
             decoder = default_decoder(X.shape[1:], self.n_components)
             
-            
         if not self.match_nonparametric_umap:
+            print("Fitting parametric Umap")
             self.model = Model(self.lr, encoder, decoder, beta=self.beta, min_dist=self.min_dist, reconstruction_loss=self.reconstruction_loss)
             graph = get_umap_graph(X, n_neighbors=self.n_neighbors, metric=self.metric, random_state=self.random_state, knn_indices=self.knn_indices, knn_dists=self.knn_dists)
+            print("Training start")
             trainer.fit(
                 model=self.model,
-                datamodule=Datamodule(UMAPDataset(X, graph), self.batch_size, self.num_workers)
-                )
+                #datamodule=Datamodule(UMAPDataset(X, graph), self.batch_size, self.num_workers)
+                datamodule=Datamodule(UMAPDataset(X, graph, self.batch_size), self.batch_size, self.num_workers)
+            )
         else:
             print("Fitting Non parametric Umap")
             non_parametric_umap = UMAP(n_neighbors=self.n_neighbors, min_dist=self.min_dist, metric=self.metric, n_components=self.n_components, random_state=self.random_state, verbose=True)

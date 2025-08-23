@@ -29,14 +29,18 @@ def get_graph_elements(graph_, n_epochs):
     return graph, epochs_per_sample, head, tail, weight, n_vertices
 
 class UMAPDataset(Dataset):
-    def __init__(self, data, graph_, n_epochs=200):
+    def __init__(self, data, graph_, batch_size=256, n_epochs=200):
+        print("Start UMAPDataset initiation ...", flush=True)
         graph, epochs_per_sample, head, tail, weight, n_vertices = get_graph_elements(graph_, n_epochs)
 
-        self.head = head
-        self.tail = tail
-        self.epochs_per_sample = epochs_per_sample
-        self.total = epochs_per_sample.sum()
-        '''
+        self.data = torch.tensor(data, device="cuda")
+        self.probs = torch.tensor(epochs_per_sample / epochs_per_sample.sum(), device="cuda")
+        self.head = torch.tensor(head, device="cuda")
+        self.tail = torch.tensor(tail, device="cuda")
+        self.batch_size = batch_size
+        self.total = int(epochs_per_sample.sum())
+
+        '''        
         self.edges_to_exp, self.edges_from_exp = (
             np.repeat(head, epochs_per_sample.astype("int")),
             np.repeat(tail, epochs_per_sample.astype("int")),
@@ -44,21 +48,27 @@ class UMAPDataset(Dataset):
         shuffle_mask = np.random.permutation(np.arange(len(self.edges_to_exp)))
         self.edges_to_exp = self.edges_to_exp[shuffle_mask].astype(np.int64)
         self.edges_from_exp = self.edges_from_exp[shuffle_mask].astype(np.int64)
+        self.total = len(self.edges_to_exp)
         '''
-        self.data = torch.Tensor(data)
+        print("End UMAPDataset.", self.total, self.data.shape[0], flush=True)
         
     def __len__(self):
-        return int(self.total)
-        #return int(self.data.shape[0])
+        #return int(self.total/self.batch_size)
+        return int(self.data.shape[0]/self.batch_size)
     
     def __getitem__(self, index):
-        # Instead of expanding, sample one edge
-        edge_idx = np.random.choice(len(self.head), p=self.epochs_per_sample / self.total)
-        return self.data[self.head[edge_idx]], self.data[self.tail[edge_idx]]
-    
-        #edges_to_exp = self.data[self.edges_to_exp[index]]
-        #edges_from_exp = self.data[self.edges_from_exp[index]]
-        #return (edges_to_exp, edges_from_exp)
+        # Instead of expanding, sample 
+        chunk_size = 10_000_000
+        N = len(self.probs)//chunk_size
+        chunk_size = len(self.probs)//N
+        chunk_idx = torch.randint(0, N, (1,), device="cuda")
+        start = chunk_idx * chunk_size
+        end = min(start + chunk_size, len(self.probs))
+        edge_idx = torch.multinomial(self.probs[start:end], self.batch_size, replacement=True) + start
+        edges_to_exp= self.data[self.head[edge_idx]]
+        edges_from_exp = self.data[self.tail[edge_idx]]
+
+        return (edges_to_exp, edges_from_exp)
     
 class MatchDataset(Dataset):
     def __init__(self, data, embeddings):
