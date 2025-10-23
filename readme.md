@@ -2,7 +2,7 @@ Parametric UMAP port for pytorch using pytorch lightning for the training loop.
 
 ## Install
 ```bash
-pip install umap-pytorch
+pip install git+https://github.com/ucscBrainExplorer/umap_pytorch.git
 ```
 
 ## Usage
@@ -46,3 +46,4 @@ pumap.save(path)
 from umap_pytorch import load_pumap
 pumap = load_pumap(path)
 ```
+
