@@ -31,6 +31,7 @@ def get_graph_elements(graph_, n_epochs):
 class UMAPDataset(Dataset):
     def __init__(self, data, graph_, batch_size=256, n_epochs=200):
         print("Start UMAPDataset initiation ...", flush=True)
+        print ("batch_size:", batch_size)
         graph, epochs_per_sample, head, tail, weight, n_vertices = get_graph_elements(graph_, n_epochs)
 
         self.data = torch.tensor(data, device="cuda")
