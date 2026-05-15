@@ -1,7 +1,8 @@
 from pynndescent import NNDescent
 import numpy as np
 from sklearn.utils import check_random_state
-from umap.umap_ import fuzzy_simplicial_set
+from sklearn.preprocessing import LabelEncoder
+from umap.umap_ import fuzzy_simplicial_set, general_simplicial_set_intersection, reset_local_connectivity, discrete_metric_simplicial_set_intersection
 import torch
 
 def convert_distance_to_probability(distances, a=1.0, b=1.0):
@@ -50,7 +51,7 @@ def umap_loss(embedding_to, embedding_from, _a, _b, batch_size, negative_sample_
     loss = torch.mean(ce_loss)
     return loss
 
-def get_umap_graph(X, n_neighbors=10, metric="cosine", random_state=None, knn_indices= None, knn_dists = None):
+def get_umap_graph(X, n_neighbors=10, metric="cosine", random_state=None, knn_indices=None, knn_dists=None, y=None):
     random_state = check_random_state(None) if random_state == None else random_state
 
     if (knn_indices is None) and (knn_dists is None) : 
@@ -89,4 +90,14 @@ def get_umap_graph(X, n_neighbors=10, metric="cosine", random_state=None, knn_in
     )
     
     print("End fuzzy_simplicial_set")
+
+    if y is not None:
+        print("Adding supervision...")
+        labels = LabelEncoder().fit_transform(y)
+        umap_graph = discrete_metric_simplicial_set_intersection(
+            umap_graph, labels, unknown_dist=1.0, far_dist=5.0,
+        )
+        umap_graph = reset_local_connectivity(umap_graph)
+        print("Supervision applied.")
+
     return umap_graph
