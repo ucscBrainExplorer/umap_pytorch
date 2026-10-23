@@ -59,17 +59,15 @@ class UMAPDataset(Dataset):
     
     def __getitem__(self, index):
         # Instead of expanding, sample
-        chunk_size = 10_000_000
-        if len(self.probs) < chunk_size:
-            # Dataset too small for chunking - use all edges
-            edge_idx = torch.multinomial(self.probs, self.batch_size, replacement=True)
-        else:
-            N = len(self.probs)//chunk_size
-            chunk_size = len(self.probs)//N
-            chunk_idx = torch.randint(0, N, (1,), device="cuda")
-            start = chunk_idx * chunk_size
-            end = min(start + chunk_size, len(self.probs))
-            edge_idx = torch.multinomial(self.probs[start:end], self.batch_size, replacement=True) + start
+        # torch.multinomial allows at most 2^24 categories, so sample within a chunk.
+        # Ceil division: chunks cover every edge and none exceeds 10M (N=1 for small graphs).
+        n_edges = len(self.probs)
+        N = -(-n_edges // 10_000_000)
+        chunk_size = -(-n_edges // N)
+        chunk_idx = torch.randint(0, N, (1,), device="cuda")
+        start = chunk_idx * chunk_size
+        end = min(start + chunk_size, n_edges)
+        edge_idx = torch.multinomial(self.probs[start:end], self.batch_size, replacement=True) + start
 
         edges_to_exp= self.data[self.head[edge_idx]]
         edges_from_exp = self.data[self.tail[edge_idx]]
